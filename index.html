@@ -61,6 +61,14 @@ dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);c
 dialog::backdrop{background:rgba(0,0,0,.45)}
 dialog h3{margin:0 0 10px}
 dialog input{margin-bottom:8px}
+.chip{background:color-mix(in srgb,var(--c,var(--acc)) 25%,transparent);border-left:3px solid var(--c,var(--acc))}
+.chip.done{background:transparent}
+.cols{display:flex;gap:10px;flex-wrap:wrap}
+.cp{width:38px;height:38px;border-radius:50%;border:3px solid transparent;cursor:pointer}
+.cp.sel{border-color:var(--ink)}
+.dot{width:26px;height:26px;min-width:26px;border-radius:50%;border:0;margin-top:1px;cursor:pointer}
+.lg{font-size:16px;margin:16px 0 4px;padding-bottom:4px;border-bottom:2px solid var(--line)}
+.lg.late{color:#c0392b}
 :focus-visible{outline:3px solid var(--acc);outline-offset:1px}
 </style>
 </head>
@@ -74,6 +82,7 @@ dialog input{margin-bottom:8px}
   <button class="btn" id="vm">Mjesec</button>
   <button class="btn" id="vw">Tjedan</button>
   <button class="btn" id="vs">Raspored</button>
+  <button class="btn" id="vl">Lista</button>
   <button class="btn" id="exp">Izvoz</button>
   <button class="btn" id="imp">Uvoz</button>
   <input type="file" id="file" accept=".json" hidden>
@@ -84,19 +93,16 @@ dialog input{margin-bottom:8px}
     <div class="grid" id="grid"></div>
   </section>
   <section class="panel" id="schp" hidden></section>
+  <section class="panel" id="lstp" hidden></section>
   <aside class="panel side">
     <h2 id="dayh"></h2>
     <div class="add">
       <input type="text" id="tt" placeholder="Novi zadatak" maxlength="200">
       <div class="row"><input type="date" id="td"><input type="time" id="tm" style="max-width:130px"></div>
+      <div class="cols" id="cols"></div>
       <button class="btn on" id="addb">Dodaj zadatak</button>
     </div>
     <div id="dayl"></div>
-    <div class="tabs">
-      <button class="btn on" id="fa">Svi otvoreni</button>
-      <button class="btn" id="fo">Zakašnjeli</button>
-    </div>
-    <div id="allt"></div>
   </aside>
 </main>
 <dialog id="dlg">
@@ -110,7 +116,8 @@ const $=id=>document.getElementById(id);
 const KEY="offline-planner-v1",KEY2="offline-planner-schedule-v1";
 const DN=["Pon","Uto","Sri","Čet","Pet","Sub","Ned"];
 const SL=["08:30–10:00","10:15–11:45","12:00–13:30","13:45–15:15","15:30–17:00","17:15–18:45","19:00–20:30"];
-let tasks=[],sched={},view="month",cur=new Date(),sel=iso(new Date()),filt="all",edit=null;
+let tasks=[],sched={},view="month",cur=new Date(),sel=iso(new Date()),filt="open",edit=null,selColor=0;
+const COL=["#1f6f6b","#d64545","#3b6fd4","#e0a21b","#8e54c9","#3a9b4d"];
 try{tasks=JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){}
 try{sched=JSON.parse(localStorage.getItem(KEY2)||"{}")}catch(e){}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(tasks));localStorage.setItem(KEY2,JSON.stringify(sched))}catch(e){}}
@@ -123,11 +130,12 @@ function byDay(k){return tasks.filter(t=>t.date===k).sort((a,b)=>(a.time||"99").
 $("dow").innerHTML=DN.map(d=>"<div>"+d+"</div>").join("");
 
 function render(){
-  const sch=view==="sched";
-  $("calp").hidden=sch;$("schp").hidden=!sch;
-  $("prev").style.visibility=$("next").style.visibility=sch?"hidden":"visible";
-  ["vm","vw","vs"].forEach(id=>$(id).classList.toggle("on",id==="v"+(view==="month"?"m":view==="week"?"w":"s")));
-  if(sch)renderSched();else renderCal();
+  const sch=view==="sched",lst=view==="list";
+  $("calp").hidden=sch||lst;$("schp").hidden=!sch;$("lstp").hidden=!lst;
+  $("prev").style.visibility=$("next").style.visibility=(sch||lst)?"hidden":"visible";
+  const VM={month:"vm",week:"vw",sched:"vs",list:"vl"};
+  Object.keys(VM).forEach(k=>$(VM[k]).classList.toggle("on",view===k));
+  if(sch)renderSched();else if(lst)renderList();else renderCal();
   renderSide();
 }
 function renderCal(){
@@ -148,7 +156,7 @@ function renderCal(){
     const d=addDays(start,i),k=iso(d),ts=byDay(k),max=view==="week"?30:3;
     h+=`<div class="cell ${view==="week"?"week":""} ${k===todayK?"today":""} ${k===sel?"sel":""} ${view==="month"&&d.getMonth()!==month?"out":""}" data-k="${k}">
       <span class="n">${d.getDate()}</span>
-      ${ts.slice(0,max).map(t=>`<div class="chip ${t.done?"done":""}">${t.time?t.time+" ":""}${esc(t.title)}</div>`).join("")}
+      ${ts.slice(0,max).map(t=>`<div class="chip ${t.done?"done":""}" style="--c:${COL[t.color||0]}">${t.time?t.time+" ":""}${esc(t.title)}</div>`).join("")}
       ${ts.length>max?`<div class="more">još ${ts.length-max}</div>`:""}</div>`;
   }
   $("grid").innerHTML=h;
@@ -185,17 +193,40 @@ function renderSide(){
   }
   const dl=byDay(sel);
   $("dayl").innerHTML=ch+(dl.length?dl.map(t=>row(t)).join(""):'<div class="empty">Nema zadataka za ovaj dan.</div>');
-  let all=tasks.filter(t=>!t.done);
-  if(filt==="over")all=all.filter(t=>t.date<todayK);
-  all.sort((a,b)=>(a.date+(a.time||"")).localeCompare(b.date+(b.time||"")));
-  $("allt").innerHTML=all.length?all.map(t=>row(t,true)).join(""):'<div class="empty">Ovdje nema ničega.</div>';
-  $("fa").classList.toggle("on",filt==="all");$("fo").classList.toggle("on",filt==="over");
   document.querySelectorAll("[data-chk]").forEach(b=>b.onchange=()=>{tasks.find(x=>x.id===b.dataset.chk).done=b.checked;save();render()});
+  document.querySelectorAll("[data-col]").forEach(b=>b.onclick=()=>{const t=tasks.find(x=>x.id===b.dataset.col);t.color=((t.color||0)+1)%COL.length;save();render()});
   document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{tasks=tasks.filter(x=>x.id!==b.dataset.del);save();render()});
   document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{sel=b.dataset.go;cur=parse(sel);$("td").value=sel;if(view==="sched")view="month";render()});
 }
+function renderList(){
+  $("title").textContent="Lista zadataka";
+  const todayK=iso(new Date());
+  const F=[["open","Otvoreni"],["over","Zakašnjeli"],["done","Završeni"],["all","Svi"]];
+  const ts=tasks.filter(t=>filt==="open"?!t.done:filt==="over"?(!t.done&&t.date<todayK):filt==="done"?t.done:true);
+  ts.sort((a,b)=>(a.date+(a.time||"")).localeCompare(b.date+(b.time||"")));
+  if(filt==="done")ts.reverse();
+  let h='<div class="row" style="margin-bottom:6px;flex-wrap:wrap">'+F.map(f=>`<button class="btn ${filt===f[0]?"on":""}" data-f="${f[0]}">${f[1]}</button>`).join("")+"</div>";
+  if(!ts.length)h+='<div class="empty">Nema zadataka.</div>';
+  let last="";
+  ts.forEach(t=>{
+    if(t.date!==last){
+      last=t.date;
+      const d=parse(t.date),diff=Math.round((d-parse(todayK))/864e5);
+      const lab=diff===0?"Danas":diff===1?"Sutra":diff===-1?"Jučer":"";
+      h+=`<h2 class="lg ${diff<0&&!t.done?"late":""}">${lab?lab+" · ":""}${d.toLocaleDateString("hr-HR",{weekday:"long",day:"numeric",month:"long",year:"numeric"})}</h2>`;
+    }
+    h+=row(t);
+  });
+  $("lstp").innerHTML=h;
+  document.querySelectorAll("[data-f]").forEach(b=>b.onclick=()=>{filt=b.dataset.f;render()});
+}
+function renderCols(){
+  $("cols").innerHTML=COL.map((c,i)=>`<button class="cp ${i===selColor?"sel":""}" data-c="${i}" style="background:${c}" aria-label="Boja ${i+1}"></button>`).join("");
+  document.querySelectorAll("[data-c]").forEach(b=>b.onclick=()=>{selColor=+b.dataset.c;renderCols()});
+}
 function row(t,showDate){
   return `<div class="task ${t.done?"done":""}"><input type="checkbox" data-chk="${t.id}" ${t.done?"checked":""} aria-label="Završeno">
+  <button class="dot" data-col="${t.id}" style="background:${COL[t.color||0]}" aria-label="Promijeni boju"></button>
   <div class="t">${esc(t.title)}<small>${showDate?`<a href="#" data-go="${t.date}" onclick="return false" style="color:inherit">${parse(t.date).toLocaleDateString("hr-HR",{weekday:"short",day:"numeric",month:"short"})}</a>`:""}${t.time?(showDate?" · ":"")+t.time:""}</small></div>
   <button class="x" data-del="${t.id}" aria-label="Obriši zadatak">×</button></div>`;
 }
@@ -208,11 +239,11 @@ $("today").onclick=()=>{cur=new Date();sel=iso(cur);$("td").value=sel;if(view===
 $("vm").onclick=()=>{view="month";render()};
 $("vw").onclick=()=>{view="week";render()};
 $("vs").onclick=()=>{view="sched";render()};
-$("fa").onclick=()=>{filt="all";render()};$("fo").onclick=()=>{filt="over";render()};
+$("vl").onclick=()=>{view="list";render()};
 function add(){
   const title=$("tt").value.trim(),date=$("td").value||sel;
   if(!title){$("tt").focus();return}
-  tasks.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),title,date,time:$("tm").value,done:false});
+  tasks.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),title,date,time:$("tm").value,done:false,color:selColor});
   save();$("tt").value="";$("tm").value="";sel=date;cur=parse(date);if(view==="sched")view="month";render();
 }
 $("addb").onclick=add;
@@ -245,6 +276,7 @@ $("file").onchange=e=>{
   r.readAsText(f);
 };
 $("td").value=sel;
+renderCols();
 render();
 if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
 try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
