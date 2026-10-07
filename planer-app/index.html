@@ -1,0 +1,253 @@
+<!DOCTYPE html>
+<html lang="hr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#1f6f6b">
+<title>Planer</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{--bg:#f6f7f4;--panel:#fff;--ink:#1d2b2a;--mute:#6b7a78;--line:#dfe4e0;--acc:#1f6f6b;--accbg:#dff0ee;--today:#f2b84b;--done:#9aa7a5}
+@media (prefers-color-scheme:dark){:root{--bg:#141a19;--panel:#1c2423;--ink:#e6eeec;--mute:#8da09d;--line:#2c3836;--acc:#5fc0b9;--accbg:#22403d;--today:#d9a23a;--done:#617370}}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.4 Georgia,"Times New Roman",serif;touch-action:manipulation;padding:env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left)}
+button,input{font:inherit;color:inherit}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--line);background:var(--panel)}
+h1{font-size:21px;margin:0 8px 0 0;min-width:190px}
+.btn{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:0 16px;min-height:44px;cursor:pointer}
+.btn.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+.sp{flex:1}
+main{display:grid;grid-template-columns:1fr 340px;gap:14px;padding:14px 16px;max-width:1400px;margin:auto}
+@media(max-width:760px){main{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:12px}
+.dow{display:grid;grid-template-columns:repeat(7,1fr);text-align:center;color:var(--mute);font-size:14px;padding-bottom:6px}
+.grid{display:grid;grid-template-columns:repeat(7,1fr);gap:4px}
+.cell{min-height:100px;border:1px solid var(--line);border-radius:8px;padding:4px;cursor:pointer;overflow:hidden}
+.cell.week{min-height:360px}
+.cell.out{opacity:.45}
+.cell.sel{outline:3px solid var(--acc)}
+.cell .n{font-size:14px;display:inline-block;min-width:26px;text-align:center;border-radius:13px}
+.cell.today .n{background:var(--today);color:#000;font-weight:bold}
+.chip{font-size:13px;background:var(--accbg);border-radius:4px;padding:1px 5px;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.chip.done{text-decoration:line-through;color:var(--done);background:transparent}
+.more{font-size:12px;color:var(--mute)}
+.side h2{font-size:17px;margin:10px 0 6px}
+.side h2:first-child{margin-top:0}
+.add{display:grid;gap:8px;margin:8px 0 10px}
+input[type=text],input[type=date],input[type=time]{border:1px solid var(--line);background:var(--bg);border-radius:8px;padding:0 10px;min-height:44px;width:100%;font-size:16px}
+.row{display:flex;gap:8px}
+.task{display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-bottom:1px solid var(--line)}
+.task:last-child{border:0}
+.task input{width:24px;height:24px;margin-top:2px}
+.task .t{flex:1;word-break:break-word}
+.task.done .t{text-decoration:line-through;color:var(--done)}
+.task small{color:var(--mute);display:block}
+.x{background:none;border:0;color:var(--mute);cursor:pointer;font-size:24px;min-width:44px;min-height:44px;margin:-8px -8px -8px 0}
+.tabs{display:flex;gap:8px;margin:12px 0 4px}
+.empty{color:var(--mute);padding:8px 0}
+.sg{display:grid;grid-template-columns:78px repeat(5,1fr);gap:4px}
+.sh{text-align:center;padding:8px 0;font-weight:bold;border-bottom:2px solid var(--line)}
+.sh.td{border-color:var(--today)}
+.st{font-size:13px;color:var(--mute);text-align:center;align-self:center;line-height:1.3}
+.sc{min-height:78px;border:1px dashed var(--line);border-radius:8px;background:transparent;color:var(--mute);cursor:pointer;padding:4px;display:flex;flex-direction:column;justify-content:center;align-items:center;text-align:center;font-size:15px}
+.sc.f{border:1px solid var(--acc);background:var(--accbg);color:var(--ink)}
+.sc small{color:var(--mute)}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--panel);color:var(--ink);width:min(380px,92vw);padding:18px}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog h3{margin:0 0 10px}
+dialog input{margin-bottom:8px}
+:focus-visible{outline:3px solid var(--acc);outline-offset:1px}
+</style>
+</head>
+<body>
+<header>
+  <h1 id="title"></h1>
+  <button class="btn" id="prev" aria-label="Prethodno">‹</button>
+  <button class="btn" id="today">Danas</button>
+  <button class="btn" id="next" aria-label="Sljedeće">›</button>
+  <span class="sp"></span>
+  <button class="btn" id="vm">Mjesec</button>
+  <button class="btn" id="vw">Tjedan</button>
+  <button class="btn" id="vs">Raspored</button>
+  <button class="btn" id="exp">Izvoz</button>
+  <button class="btn" id="imp">Uvoz</button>
+  <input type="file" id="file" accept=".json" hidden>
+</header>
+<main>
+  <section class="panel" id="calp">
+    <div class="dow" id="dow"></div>
+    <div class="grid" id="grid"></div>
+  </section>
+  <section class="panel" id="schp" hidden></section>
+  <aside class="panel side">
+    <h2 id="dayh"></h2>
+    <div class="add">
+      <input type="text" id="tt" placeholder="Novi zadatak" maxlength="200">
+      <div class="row"><input type="date" id="td"><input type="time" id="tm" style="max-width:130px"></div>
+      <button class="btn on" id="addb">Dodaj zadatak</button>
+    </div>
+    <div id="dayl"></div>
+    <div class="tabs">
+      <button class="btn on" id="fa">Svi otvoreni</button>
+      <button class="btn" id="fo">Zakašnjeli</button>
+    </div>
+    <div id="allt"></div>
+  </aside>
+</main>
+<dialog id="dlg">
+  <h3 id="dh"></h3>
+  <input type="text" id="cn" placeholder="Naziv predmeta" maxlength="80">
+  <input type="text" id="cr" placeholder="Učionica (nije obavezno)" maxlength="40">
+  <div class="row"><button class="btn on" id="cs">Spremi</button><button class="btn" id="cd">Obriši</button><button class="btn" id="cc">Odustani</button></div>
+</dialog>
+<script>
+const $=id=>document.getElementById(id);
+const KEY="offline-planner-v1",KEY2="offline-planner-schedule-v1";
+const DN=["Pon","Uto","Sri","Čet","Pet","Sub","Ned"];
+const SL=["08:30–10:00","10:15–11:45","12:00–13:30","13:45–15:15","15:30–17:00","17:15–18:45","19:00–20:30"];
+let tasks=[],sched={},view="month",cur=new Date(),sel=iso(new Date()),filt="all",edit=null;
+try{tasks=JSON.parse(localStorage.getItem(KEY)||"[]")}catch(e){}
+try{sched=JSON.parse(localStorage.getItem(KEY2)||"{}")}catch(e){}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(tasks));localStorage.setItem(KEY2,JSON.stringify(sched))}catch(e){}}
+function iso(d){return d.getFullYear()+"-"+String(d.getMonth()+1).padStart(2,"0")+"-"+String(d.getDate()).padStart(2,"0")}
+function parse(s){const[a,b,c]=s.split("-").map(Number);return new Date(a,b-1,c)}
+function monday(d){const x=new Date(d.getFullYear(),d.getMonth(),d.getDate());x.setDate(x.getDate()-((x.getDay()+6)%7));return x}
+function addDays(d,n){const x=new Date(d);x.setDate(x.getDate()+n);return x}
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]))}
+function byDay(k){return tasks.filter(t=>t.date===k).sort((a,b)=>(a.time||"99").localeCompare(b.time||"99"))}
+$("dow").innerHTML=DN.map(d=>"<div>"+d+"</div>").join("");
+
+function render(){
+  const sch=view==="sched";
+  $("calp").hidden=sch;$("schp").hidden=!sch;
+  $("prev").style.visibility=$("next").style.visibility=sch?"hidden":"visible";
+  ["vm","vw","vs"].forEach(id=>$(id).classList.toggle("on",id==="v"+(view==="month"?"m":view==="week"?"w":"s")));
+  if(sch)renderSched();else renderCal();
+  renderSide();
+}
+function renderCal(){
+  const todayK=iso(new Date()),month=cur.getMonth();
+  let start,count;
+  if(view==="month"){
+    start=monday(new Date(cur.getFullYear(),month,1));
+    const last=new Date(cur.getFullYear(),month+1,0);
+    count=Math.ceil(((last-start)/864e5+1)/7)*7;
+    $("title").textContent=cur.toLocaleDateString("hr-HR",{month:"long",year:"numeric"});
+  }else{
+    start=monday(cur);count=7;
+    const e=addDays(start,6);
+    $("title").textContent=start.toLocaleDateString("hr-HR",{day:"numeric",month:"short"})+" – "+e.toLocaleDateString("hr-HR",{day:"numeric",month:"short",year:"numeric"});
+  }
+  let h="";
+  for(let i=0;i<count;i++){
+    const d=addDays(start,i),k=iso(d),ts=byDay(k),max=view==="week"?30:3;
+    h+=`<div class="cell ${view==="week"?"week":""} ${k===todayK?"today":""} ${k===sel?"sel":""} ${view==="month"&&d.getMonth()!==month?"out":""}" data-k="${k}">
+      <span class="n">${d.getDate()}</span>
+      ${ts.slice(0,max).map(t=>`<div class="chip ${t.done?"done":""}">${t.time?t.time+" ":""}${esc(t.title)}</div>`).join("")}
+      ${ts.length>max?`<div class="more">još ${ts.length-max}</div>`:""}</div>`;
+  }
+  $("grid").innerHTML=h;
+  document.querySelectorAll(".cell").forEach(c=>c.onclick=()=>{sel=c.dataset.k;$("td").value=sel;render()});
+}
+function renderSched(){
+  $("title").textContent="Raspored predavanja";
+  const tdi=(new Date().getDay()+6)%7;
+  let h='<div class="sg"><div></div>'+DN.slice(0,5).map((d,i)=>`<div class="sh ${i===tdi?"td":""}">${d}</div>`).join("");
+  SL.forEach((t,s)=>{
+    h+=`<div class="st">${t.replace("–","<br>")}</div>`;
+    for(let d=0;d<5;d++){
+      const c=sched[d+"-"+s];
+      h+=`<button class="sc ${c?"f":""}" data-d="${d}" data-s="${s}" aria-label="${DN[d]} ${t}">${c?`<b>${esc(c.n)}</b><small>${esc(c.r||"")}</small>`:"+"}</button>`;
+    }
+  });
+  $("schp").innerHTML=h+"</div>";
+  document.querySelectorAll(".sc").forEach(b=>b.onclick=()=>{
+    edit=b.dataset.d+"-"+b.dataset.s;
+    const c=sched[edit]||{};
+    $("dh").textContent=DN[b.dataset.d]+", "+SL[b.dataset.s];
+    $("cn").value=c.n||"";$("cr").value=c.r||"";
+    $("cd").style.display=c.n?"":"none";
+    $("dlg").showModal();$("cn").focus();
+  });
+}
+function renderSide(){
+  const todayK=iso(new Date());
+  $("dayh").textContent=parse(sel).toLocaleDateString("hr-HR",{weekday:"long",day:"numeric",month:"long"});
+  const di=(parse(sel).getDay()+6)%7;let ch="";
+  if(di<5){
+    const cl=SL.map((t,s)=>sched[di+"-"+s]?{t,c:sched[di+"-"+s]}:null).filter(Boolean);
+    if(cl.length)ch="<h2>Predavanja</h2>"+cl.map(x=>`<div class="task"><div class="t">${esc(x.c.n)}<small>${x.t}${x.c.r?" · "+esc(x.c.r):""}</small></div></div>`).join("")+"<h2>Zadaci</h2>";
+  }
+  const dl=byDay(sel);
+  $("dayl").innerHTML=ch+(dl.length?dl.map(t=>row(t)).join(""):'<div class="empty">Nema zadataka za ovaj dan.</div>');
+  let all=tasks.filter(t=>!t.done);
+  if(filt==="over")all=all.filter(t=>t.date<todayK);
+  all.sort((a,b)=>(a.date+(a.time||"")).localeCompare(b.date+(b.time||"")));
+  $("allt").innerHTML=all.length?all.map(t=>row(t,true)).join(""):'<div class="empty">Ovdje nema ničega.</div>';
+  $("fa").classList.toggle("on",filt==="all");$("fo").classList.toggle("on",filt==="over");
+  document.querySelectorAll("[data-chk]").forEach(b=>b.onchange=()=>{tasks.find(x=>x.id===b.dataset.chk).done=b.checked;save();render()});
+  document.querySelectorAll("[data-del]").forEach(b=>b.onclick=()=>{tasks=tasks.filter(x=>x.id!==b.dataset.del);save();render()});
+  document.querySelectorAll("[data-go]").forEach(b=>b.onclick=()=>{sel=b.dataset.go;cur=parse(sel);$("td").value=sel;if(view==="sched")view="month";render()});
+}
+function row(t,showDate){
+  return `<div class="task ${t.done?"done":""}"><input type="checkbox" data-chk="${t.id}" ${t.done?"checked":""} aria-label="Završeno">
+  <div class="t">${esc(t.title)}<small>${showDate?`<a href="#" data-go="${t.date}" onclick="return false" style="color:inherit">${parse(t.date).toLocaleDateString("hr-HR",{weekday:"short",day:"numeric",month:"short"})}</a>`:""}${t.time?(showDate?" · ":"")+t.time:""}</small></div>
+  <button class="x" data-del="${t.id}" aria-label="Obriši zadatak">×</button></div>`;
+}
+function step(n){
+  if(view==="month")cur=new Date(cur.getFullYear(),cur.getMonth()+n,1);else cur=addDays(cur,7*n);
+  render();
+}
+$("prev").onclick=()=>step(-1);$("next").onclick=()=>step(1);
+$("today").onclick=()=>{cur=new Date();sel=iso(cur);$("td").value=sel;if(view==="sched")view="month";render()};
+$("vm").onclick=()=>{view="month";render()};
+$("vw").onclick=()=>{view="week";render()};
+$("vs").onclick=()=>{view="sched";render()};
+$("fa").onclick=()=>{filt="all";render()};$("fo").onclick=()=>{filt="over";render()};
+function add(){
+  const title=$("tt").value.trim(),date=$("td").value||sel;
+  if(!title){$("tt").focus();return}
+  tasks.push({id:Date.now().toString(36)+Math.random().toString(36).slice(2,6),title,date,time:$("tm").value,done:false});
+  save();$("tt").value="";$("tm").value="";sel=date;cur=parse(date);if(view==="sched")view="month";render();
+}
+$("addb").onclick=add;
+$("tt").onkeydown=e=>{if(e.key==="Enter")add()};
+$("cs").onclick=()=>{
+  const n=$("cn").value.trim();
+  if(n)sched[edit]={n,r:$("cr").value.trim()};else delete sched[edit];
+  save();$("dlg").close();render();
+};
+$("cd").onclick=()=>{delete sched[edit];save();$("dlg").close();render()};
+$("cc").onclick=()=>$("dlg").close();
+$("exp").onclick=()=>{
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob([JSON.stringify({tasks,sched},null,1)],{type:"application/json"}));
+  a.download="planer-kopija-"+iso(new Date())+".json";a.click();
+};
+$("imp").onclick=()=>$("file").click();
+$("file").onchange=e=>{
+  const f=e.target.files[0];if(!f)return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const d=JSON.parse(r.result);
+      if(Array.isArray(d))tasks=d;
+      else if(d&&Array.isArray(d.tasks)){tasks=d.tasks;sched=d.sched||{}}
+      else throw 0;
+      save();render();
+    }catch(x){alert("Ova datoteka nije sigurnosna kopija planera.")}
+  };
+  r.readAsText(f);
+};
+$("td").value=sel;
+render();
+if("serviceWorker" in navigator)navigator.serviceWorker.register("sw.js").catch(()=>{});
+try{if(navigator.storage&&navigator.storage.persist)navigator.storage.persist()}catch(e){}
+</script>
+</body>
+</html>
